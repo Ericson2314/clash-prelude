@@ -41,7 +41,7 @@ module CLaSH.Sized.Vector
     -- ** Special folds
   , dfold, vfold
     -- ** Indexing 'Vec'tors
-  , (!!), replace, maxIndex, length
+  , (!!), safeIndexPow2, replace, maxIndex, length
     -- ** Generating 'Vec'tors
   , replicate, repeat, iterate, iterateI, generate, generateI
     -- ** Misc
@@ -56,8 +56,8 @@ import Data.Default               (Default (..))
 import qualified Data.Foldable    as F
 import Data.Proxy                 (Proxy (..))
 import Data.Singletons.Prelude    (TyFun,Apply,type ($))
-import GHC.TypeLits               (CmpNat, KnownNat, Nat, type (+), type (*),
-                                   natVal)
+import GHC.TypeLits               (CmpNat, KnownNat, Nat, natVal,
+                                   type (+), type (*), type (^))
 import GHC.Base                   (Int(I#),Int#,isTrue#)
 import GHC.Prim                   ((==#),(<#),(-#))
 import Language.Haskell.TH        (ExpQ)
@@ -788,6 +788,29 @@ index_int xs i@(I# n0)
 -- *** Exception: CLaSH.Sized.Vector.(!!): index 14 is larger than maximum index 4
 (!!) :: (KnownNat n, Integral i) => Vec n a -> i -> a
 xs !! i = index_int xs (fromIntegral i)
+
+{-# INLINE safeIndexPow2 #-}
+-- | Vector index (subscript) operator.
+--
+-- Unlike '(!!)', it enforces that the vector has two raised to the number of
+-- bits of the index. Use 'Unsigned' or 'BitVector' to rule out negative
+-- numbers, and ensure a 1-1 mapping between indices and elements in the vector.
+--
+-- __NB__: vector elements have an __ASCENDING__ subscript starting from 0 and
+-- ending at 'maxIndex'.
+--
+-- >>> (1:>2:>3:>4:>Nil) `safeIndexPow2` (0 :: Unsigned 2)
+-- 1
+-- >>> (1:>2:>3:>4:>Nil) `safeIndexPow2` (fromIntegral (maxIndex (1:>2:>3:>4:>Nil)) :: Unsigned 2)
+-- 4
+-- >>> (1:>2:>3:>4:>Nil) `safeIndexPow2` (1 :: Unsigned 2)
+-- 2
+safeIndexPow2 :: KnownNat (2 ^ BitSize i)
+              => Integral i
+              => Vec (2 ^ BitSize i) a
+              -> i
+              -> a
+safeIndexPow2 = (!!)
 
 {-# NOINLINE maxIndex #-}
 -- | Index (subscript) of the last element in a 'Vec'tor
